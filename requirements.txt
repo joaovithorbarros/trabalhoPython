@@ -1,1 +1,3 @@
-# Adicione as dependências do projeto aqui (ex: requests, pandas, pytest)
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
