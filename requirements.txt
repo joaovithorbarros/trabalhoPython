@@ -1,0 +1,1 @@
+# Adicione as dependências do projeto aqui (ex: requests, pandas, pytest)

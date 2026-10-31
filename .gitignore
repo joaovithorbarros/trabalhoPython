@@ -1,1 +1,18 @@
+# IDEs
 .idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Testes e cache
+.pytest_cache/
+.coverage
