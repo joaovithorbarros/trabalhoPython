@@ -1,6 +1,23 @@
-from fastapi import FastAPI
-app = FastAPI()
+from fastapi import FastAPI, APIRouter
 
-@app.get("/")
+router = APIRouter()
+
+@router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Servidor funcionando."}
+
+@router.get("/emails")
+async def emails():
+    return {"emails" : []}
+
+@router.post("/login")
+async def login():
+    pass
+
+@router.get("/resumir")
+async def resumir():
+    return {"Resumo": ""}
+
+@router.get("/resposta")
+async def responder():
+    return {"Resposta": ""}
