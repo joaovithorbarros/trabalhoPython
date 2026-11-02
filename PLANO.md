@@ -1,145 +1,137 @@
 # PLANO DO PROJETO (explicado fácil)
 
 ## O que a gente está fazendo?
-Um robô que mexe no seu e-mail do Gmail. Você **fala ou escreve** pra ele, e ele:
+Um **bot do Telegram** que mexe no seu Gmail. Você **escreve** pra ele (só texto, sem voz), e ele:
 - lê seus e-mails
 - diz quais são importantes
 - faz um resumo curto
 - sugere uma resposta
 
-A **tela (UI)** quem faz é a IA. Aqui só tem o resto.
-
 ## Como as peças se encaixam (desenho)
 
 ```
-[Você fala] -> CLIENT (ouvido: voz vira texto) -> manda texto -> SERVER (cérebro)
-                                                                    |
-                                  Gmail <- pega e-mails <-----------+-> LLM (a IA que pensa)
-                                                                    |
-[Você escuta] <- CLIENT (boca: texto vira voz) <- recebe resposta <-+
+[Você no Telegram] <-> BOT (recebe e manda mensagens)
+                         |
+                         v
+                      SERVER (FastAPI, o cérebro)
+                         |
+          +--------------+--------------+
+          v                             v
+   Gmail (e-mails)              llama-server (a IA)
 ```
 
-- **Client** = o que fica no computador da pessoa. Tem ouvido e boca.
-- **Server** = o cérebro. Recebe o texto, pensa, responde.
-- **LLM** = a inteligência artificial (llama.cpp), roda no próprio PC.
-- **Gmail API** = a porta que o Google dá pra gente mexer no e-mail (biblioteca `google-api-python-client`).
+- **Bot** = o programa que conversa com você no Telegram.
+- **Server** = o cérebro. Recebe o pedido do bot, mexe no Gmail e pergunta pra IA.
+- **llama-server** = a IA (gpt-oss-20b) rodando no próprio PC. O arquivo `server/llamacpp.py` já conversa com ela.
+- **Gmail API** = a porta que o Google dá pra gente mexer no e-mail.
 
 ## O que precisa ter instalado
 
-**Programas**
-- Python 3.10 ou mais novo
-- Git
-- llama.cpp (roda a IA) e um modelo `.gguf` (ex: Qwen2.5 7B Instruct Q4_K_M)
+**Programas e contas**
+- Python 3.10 ou mais novo e Git
+- llama.cpp com um modelo `.gguf` (já temos o gpt-oss-20b rodando na porta 8888)
+- Um bot no Telegram: falar com o `@BotFather`, criar o bot e copiar o token
 - Uma conta Google com projeto no Google Cloud (Gmail API ligada e `credentials.json`)
-- Um microfone e uma caixa de som/fone
+- Um jeito de deixar o server acessível na internet pro Google devolver o login (ngrok ou Cloudflare Tunnel), só enquanto estiver testando
 
-**Bibliotecas Python (`pip install`)**
+**Bibliotecas Python (`pip install -r requirements.txt`)**
 | Biblioteca | Pra que serve |
 |---|---|
+| `python-telegram-bot` | fazer o bot do Telegram |
 | `google-api-python-client` | falar com o Gmail |
 | `google-auth-oauthlib` e `google-auth-httplib2` | botão "Entrar com o Google" |
-| `keyring` | guardar o token com segurança |
 | `fastapi` e `uvicorn` | montar e rodar o server |
 | `pydantic` | conferir se os dados estão no formato certo |
-| `httpx` ou `requests` | o client conversar com o server |
-| `websockets` | resposta chegando aos poucos (opcional) |
-| `llama-cpp-python` | usar o llama.cpp dentro do Python (ou rodar o `llama-server` e chamar por HTTP) |
-| `faster-whisper` | ouvido: voz vira texto |
-| `kokoro` e `soundfile` | boca: texto vira voz |
-| `sounddevice` e `numpy` | gravar e tocar áudio |
-| `openwakeword` | chamar por "Jarvis" (opcional) |
+| `httpx` | falar com o llama-server e com o server |
+| `cryptography` | trancar os tokens antes de guardar |
 | `beautifulsoup4` | limpar o HTML dos e-mails |
-| `python-dotenv` | guardar configurações fora do código |
+| `python-dotenv` | guardar senhas e tokens fora do código (`.env`) |
 | `pytest` | testes |
 
-> O Kokoro SÓ fala, não ouve. Pra ouvir usa o `faster-whisper`.
+O banco de dados é o SQLite, que já vem com o Python.
 
 ---
 
 ## O que precisa ser feito
 
-### 1. Login do Google
-Fazer o botão "Entrar com o Google" funcionar e guardar o crachá.
-- Criar o projeto no Google Cloud e ligar a Gmail API (pegar o arquivo `credentials.json`).
-- Fazer o login abrir a janela do Google (`google-auth-oauthlib`).
-- Salvar o token num lugar seguro (biblioteca `keyring`), **nunca no GitHub**.
+### 1. Login do Google (cada pessoa com a sua conta) 
+- O usuário manda `/login` pro bot. O bot responde com um link do Google.
+- A pessoa entra no link, autoriza, e o Google devolve o resultado pro server (rota `/oauth/callback`).
+- O link leva um código secreto (`state`) que liga o login àquele usuário do Telegram. Sem isso, a conta de um poderia cair no outro.
+- O Google só devolve pra um endereço da internet (ver ngrok acima).
+- Pedir só as permissões necessárias (ler, modificar, enviar).
+
+### 2. Guardar o login de cada usuário (charlito)
+- Banco SQLite com: id do Telegram, token do Google.
+- O token é trancado (`cryptography`) antes de salvar. A chave fica no `.env`.
 - Renovar o token quando vencer.
-- Resultado: função `login()` que devolve "pode usar o Gmail".
+- Comando `/logout` apaga tudo daquele usuário.
 
-### 2. Ler e mexer no Gmail
-Pegar e-mails e mandar e-mails.
+### 3. Ler e mexer no Gmail (ana)
 - Listar e-mails (não lidos, últimos 10, buscar por nome ou assunto).
-- Abrir um e-mail e tirar o texto limpo (o e-mail vem bagunçado, com HTML; deixar só o texto).
-- Criar rascunho e enviar e-mail.
-- Marcar como lido, arquivar.
-- Resultado: arquivo `gmail_service.py` com essas funções + e-mails falsos (mock) pra todo mundo testar.
+- Abrir um e-mail e tirar o texto limpo (sem HTML, sem assinatura e sem citações).
+- Criar rascunho, enviar, marcar como lido, arquivar.
+- Fazer também e-mails falsos (mock) pra testar sem Gmail de verdade.
 
-### 3. A IA (llama.cpp)
-Fazer a IA rodar e responder.
-- Baixar um modelo (sugestão: Qwen2.5 7B ou Llama 3.1 8B, versão GGUF Q4) e rodar com llama.cpp.
-- Deixar o modelo trocável por configuração (pra comparar modelos sem mexer no código).
-- Criar função `perguntar_ia(texto)` que devolve a resposta.
-- Fazer a resposta chegar aos poucos (palavra por palavra, "streaming").
-- Resultado: arquivo `llm.py` e documento explicando como instalar o modelo.
+### 4. A IA — **já pronta** (joao cappellari)
+- `server/llamacpp.py` com `perguntar_ia()` e `perguntar_ia_stream()`. Não precisa mudar.
 
-### 4. Resumir e sugerir resposta
-Ensinar a IA a fazer as tarefas de e-mail.
-- Escrever os prompts: "resuma este e-mail em até 3 linhas".
-- Escrever o prompt de sugerir resposta (educada, curta, em português; opção de tom formal ou informal).
-- Fazer a IA devolver resposta em formato fixo (JSON) pra o programa entender.
-- Testar com 20 e-mails falsos e ajustar até ficar bom.
-- Resultado: `resumo.py` e `resposta.py` (usam a função `perguntar_ia`).
+### 5. Resumir e sugerir resposta (joao cappellari)
+- Prompts: "resuma este e-mail em até 3 linhas" e "sugira uma resposta educada e curta, em português" (formal ou informal).
+- A IA devolve em formato fixo (JSON) pra o programa entender.
+- Testar com 20 e-mails falsos e ajustar.
 
-### 5. Detectar e-mail importante + entender o pedido
-Decidir o que é importante e entender o que o usuário quis dizer.
-- Regras simples: remetente conhecido, palavras como "urgente", "prazo", "reunião" = importante; propaganda e newsletter = não importante.
-- Pedir pra IA dar nota de 0 a 10 de importância e dizer o motivo.
-- Entender frases: "leia meu último e-mail" → ação LER; "responde dizendo que sim" → ação RESPONDER; "o que tem de importante?" → ação LISTAR_IMPORTANTES.
-- Regra de segurança: **nunca enviar e-mail sem o usuário confirmar** ("Quer mesmo enviar?").
-- Resultado: `importancia.py` e `intencao.py`.
+### 6. Detectar e-mail importante + entender o pedido
+- Regras simples: remetente conhecido, palavras como "urgente", "prazo", "reunião" = importante; propaganda = não.
+- A IA dá nota de 0 a 10 e diz o motivo.
+- Entender frases soltas: "leia meu último e-mail" → LER; "responde dizendo que sim" → RESPONDER; "o que tem de importante?" → LISTAR_IMPORTANTES.
 
-### 6. Server (FastAPI)
-Ligar todas as peças.
-- Montar o server com FastAPI: rotas `/chat`, `/emails`, `/resumir`, `/responder`, `/login`.
-- Juntar os itens 1 a 5 dentro do server.
-- Resultado: pasta `server/` rodando.
+### 7. Server (FastAPI) (joao vitor)
+- Rotas: `/chat`, `/emails`, `/resumir`, `/responder`, `/oauth/callback`.
+- Juntar os itens 1 a 6 dentro dele.
+- Responder com erro claro se o login faltar (403) ou a IA estiver fora (503).
 
-### 7. Voz (no client)
-Dar ouvido e boca ao robô.
-- Gravar o microfone e transformar em texto (STT, `faster-whisper`).
-- Transformar a resposta em voz (TTS, `Kokoro`) e tocar o áudio.
-- Mandar o texto pro server e receber a resposta.
-- Opcional (extra): chamar pelo nome "Jarvis" (wake word, `openWakeWord`).
-- Resultado: `client/voz.py`.
+### 8. Bot do Telegram (charlito)
+- Comandos: `/start`, `/login`, `/emails`, `/importantes`, `/resumir`, `/logout`.
+- Mensagem normal (sem comando) vai pro `/chat` do server.
+- Antes de enviar qualquer e-mail, mostrar a resposta com botões **Enviar / Editar / Cancelar**.
+- O Telegram aceita no máximo 4096 caracteres por mensagem: dividir as longas.
+- Mostrar "digitando..." enquanto a IA pensa.
 
-### 8. Testes e README
+### 9. Segurança
+- Lista de usuários permitidos (só gente do grupo usa o bot).
+- **Nunca enviar e-mail sem o usuário apertar "Enviar".**
+- `credentials.json`, `.env`, token do bot e o banco no `.gitignore`.
+- O app do Google fica em modo "Testing": só e-mails cadastrados como "usuário de teste" entram.
+
+### 10. Testes e README
 - Testar cada parte sozinha com e-mails falsos.
-- Testar tudo junto, primeiro digitando, depois falando, depois com Gmail de verdade.
-- Escrever o README explicando como instalar e rodar.
+- Depois testar tudo junto com Gmail de verdade.
+- README: como instalar, criar o bot, configurar o Google Cloud e o ngrok.
 
 ---
 
 ## Em que ordem fazer
 
-1. **Combinar:** decidir os nomes das funções e as pastas (ver abaixo). Cada parte é feita usando e-mails falsos.
-2. **Fazer as partes separadas:** itens 1 a 5 e 7 não dependem uns dos outros.
-3. **Juntar:** item 6 junta tudo. Testar digitando.
-4. **Voz e arrumar:** ligar a voz, testar com Gmail de verdade, consertar bugs, escrever o README.
+1. **Combinar:** nomes das funções e pastas. Cada parte usa e-mails falsos.
+2. **Partes separadas:** itens 1, 2, 3, 5, 6 e 8 não dependem uns dos outros (o 4 já está pronto).
+3. **Juntar:** item 7 junta tudo. Testar pelo Telegram só com texto.
+4. **Arrumar:** testar com Gmail de verdade, consertar bugs, README.
 
 ## Pastas sugeridas
 ```
-server/    -> main.py, gmail_auth.py, gmail_service.py, llm.py,
-              resumo.py, resposta.py, importancia.py, intencao.py
-client/    -> voz.py e a tela (feita pela IA)
+server/    -> main.py, gmail_auth.py, gmail_service.py, llamacpp.py,
+              resumo.py, resposta.py, importancia.py, intencao.py, db.py
+bot/       -> bot.py (Telegram)
 tests/     -> testes de cada parte
 ```
 
 ## Regras pra não dar briga
 - Cada um trabalha na **sua branch** do Git e abre Pull Request.
-- Nunca subir `credentials.json`, token ou senha (colocar no `.gitignore`).
+- Nunca subir senha, token ou `credentials.json`.
 - Cada função tem que ter um exemplo de uso escrito em comentário.
 - Dúvida? Pergunta no grupo antes de ficar 1 dia travado.
 
 ## Cuidados
-- O app do Google fica em modo "Testing": só e-mails cadastrados como "usuário de teste" conseguem entrar.
-- Tudo da IA roda no PC, então os e-mails não vão pra nenhuma empresa de IA (só o Gmail em si é na internet).
+- Tudo da IA roda no PC, então os e-mails não vão pra nenhuma empresa de IA (só Gmail e Telegram são na internet).
+- Mensagens no Telegram não são criptografadas de ponta a ponta nos bots: não mandar dados muito sensíveis.
