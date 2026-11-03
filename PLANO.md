@@ -22,7 +22,7 @@ Um **bot do Telegram** que mexe no seu Gmail. Você **escreve** pra ele (só tex
 
 - **Bot** = o programa que conversa com você no Telegram.
 - **Server** = o cérebro. Recebe o pedido do bot, mexe no Gmail e pergunta pra IA.
-- **llama-server** = a IA (gpt-oss-20b) rodando no próprio PC. O arquivo `server/llamacpp.py` já conversa com ela.
+- **llama-server** = a IA (gpt-oss-20b) rodando no próprio PC. O arquivo `server/modelAI/llamacpp.py` já conversa com ela.
 - **Gmail API** = a porta que o Google dá pra gente mexer no e-mail.
 
 ## O que precisa ter instalado
@@ -74,7 +74,7 @@ O banco de dados é o SQLite, que já vem com o Python.
 - Fazer também e-mails falsos (mock) pra testar sem Gmail de verdade.
 
 ### 4. A IA — **já pronta** (joao cappellari)
-- `server/llamacpp.py` com `perguntar_ia()` e `perguntar_ia_stream()`. Não precisa mudar.
+- `server/modelAI/llamacpp.py` com `perguntar_ia()` e `perguntar_ia_stream()`. Não precisa mudar.
 
 ### 5. Resumir e sugerir resposta (joao cappellari)
 - Prompts: "resuma este e-mail em até 3 linhas" e "sugira uma resposta educada e curta, em português" (formal ou informal).
