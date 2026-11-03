@@ -3,7 +3,7 @@ import os
 from collections.abc import Iterator
 import httpx
 
-LLM_URL = os.getenv("LLM_URL", "http://localhost:8888")
+LLM_URL = os.getenv("LLM_URL", "https://llamacpp.cappellari.com.br")
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
 LLM_REASONING = os.getenv("LLM_REASONING", "medium") #temperatura do jarvis
 
