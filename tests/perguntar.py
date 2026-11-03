@@ -8,11 +8,11 @@
 
 import sys
 
-from server.llamacpp import perguntar_ia_stream
+from server.modelAI import llamacpp
 
 def main():
     pergunta = " ".join(sys.argv[1:]) or input("Pergunta: ")
-    for pedaco in perguntar_ia_stream(pergunta):
+    for pedaco in llamacpp.perguntar_ia_stream(pergunta):
         print(pedaco, end="", flush=True)
     print()
 # sera?
